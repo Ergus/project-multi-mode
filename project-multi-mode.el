@@ -76,16 +76,15 @@ The address is absolute for remote hosts.")
       (setq dir (file-name-directory (directory-file-name path))))
     out))
 
-(defun project-multi--get-build-dir-list (dir)
-  "Get build_dir subdirs in current DIR.
-This searches for a CMakeCache.txt file in all the project's root
-subdirectories and returns a list with all the absolute paths."
-  (remq nil (mapcar (lambda (dirlist)
-		      (when (and (eq (file-attribute-type (cdr dirlist)) t)
-				 (not (string-suffix-p "." (car dirlist)))
-				 (file-exists-p (expand-file-name "CMakeCache.txt" (car dirlist))))
-			(car dirlist)))
-		    (directory-files-and-attributes dir t nil t 1))))
+(defun project-multi--get-project-name (filename)
+  "Parse the cmake file FILENAME to get the project name.
+Simply parses the CMakeLists.txt and search for the project name parsing
+the line project(name)."
+  (with-temp-buffer
+    (insert-file-contents-literally filename)
+    (let ((case-fold-search nil))
+      (re-search-forward "project[[:blank:]]*([[:blank:]]*\\([[:alnum:]]+\\).+)" nil t)
+      (match-string-no-properties 1))))
 
 (defun project-multi--get-build-dir (dir)
   "Get a single build_dir subdir in current DIR.
@@ -94,11 +93,19 @@ If there is only one possible build_dir, this will return it.
 When there are multiple alternatives, this will ask to the user for
 which one to use for this session."
   (unless project-build-dir ;; if project-build-dir skip it because won't be used.
-    (let ((dir-list (project-multi--get-build-dir-list dir)))
-      (if (cdr dir-list)
-	  (completing-read "Build directory: " dir-list nil t)
-	(car dir-list)))))
-
+    (let ((build-dir-list
+	   (remq nil        ;; Get the list of directories in root with a CMakeCache.txt
+		 (mapcar
+		  (lambda (dirlist)
+		    (and (eq (file-attribute-type (cdr dirlist)) t)
+			 (not (string-suffix-p "." (car dirlist)))
+			 (file-exists-p (expand-file-name "CMakeCache.txt" (car dirlist)))
+			 (car dirlist)))
+		  (directory-files-and-attributes dir t nil t 1)))))
+      ;; If only one candidate, return it, else ask to the user.
+      (if (cdr build-dir-list)
+	  (completing-read "Build directory: " build-dir-list nil t)
+	(car build-dir-list)))))
 
 ;; Utilities functions (a bit less low level) ========================
 (defun project-multi--get-plist (dir)
@@ -115,6 +122,8 @@ which one to use for this session."
     (or (project-multi--get-plist root)   ;; already exists
 	(car (push (list :project-multi 'cmake
 			 :root root
+			 :name (project-multi--get-project-name
+				(expand-file-name "CMakeLists.txt" root))
 			 :compile-command "cmake --build ."
 			 :cache nil)
 		   project-multi--alist)))))
