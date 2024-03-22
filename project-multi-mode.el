@@ -1,10 +1,10 @@
-;;; gtags-mode.el --- GNU Global integration with xref, project and imenu. -*- lexical-binding: t; -*-
+;;; project-multi-mode.el --- GNU Global integration with xref, project and imenu. -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022  Free Software Foundation, Inc.
 
 ;; Author: Jimmy Aguilar Mena
-;; URL: https://github.com/Ergus/gtags-mode
-;; Keywords: xref, project, imenu, gtags, global
+;; URL: https://github.com/Ergus/projects-multi-mode
+;; Keywords: project, cmake, build
 ;; Version: 1.1
 ;; Package-Requires: ((emacs "28"))
 
@@ -80,19 +80,19 @@ The address is absolute for remote hosts.")
   "Parse the cmake file FILENAME to get the project name.
 Simply parses the CMakeLists.txt and search for the project name parsing
 the line project(name)."
-  (with-temp-buffer
-    (insert-file-contents-literally filename)
-    (let ((case-fold-search nil))
-      (re-search-forward "project[[:blank:]]*([[:blank:]]*\\([[:alnum:]]+\\).+)" nil t)
-      (match-string-no-properties 1))))
+  (let ((case-fold-search nil))
+    (with-temp-buffer
+      (insert-file-contents-literally filename)
+      (when (re-search-forward "project[[:blank:]]*([[:blank:]]*\\([[:alnum:]]+\\).+)" nil t)
+	(match-string-no-properties 1)))))
 
 (defun project-multi--get-build-dir (dir)
   "Get a single build_dir subdir in current DIR.
 When there is no valid, subdir, this returns nil.
-If there is only one possible build_dir, this will return it.
+If there is only one possible build_dir, this will return it immediately.
 When there are multiple alternatives, this will ask to the user for
 which one to use for this session."
-  (unless project-build-dir ;; if project-build-dir skip it because won't be used.
+  (unless project-build-dir ;; if project-build-dir var is set, skip this because won't be used.
     (let ((build-dir-list
 	   (remq nil        ;; Get the list of directories in root with a CMakeCache.txt
 		 (mapcar
@@ -124,7 +124,6 @@ which one to use for this session."
 			 :root root
 			 :name (project-multi--get-project-name
 				(expand-file-name "CMakeLists.txt" root))
-			 :compile-command "cmake --build ."
 			 :cache nil)
 		   project-multi--alist)))))
 
@@ -133,30 +132,46 @@ which one to use for this session."
   (if (local-variable-p 'project-multi--plist)
       project-multi--plist
     (project-multi--set-connection-locals)
-    (setq-local gtags-mode--plist (or (project-multi--get-plist dir)
-				      (project-multi--create-plist dir)))))
+    (setq-local project-multi--plist (or (project-multi--get-plist dir)
+					 (project-multi--create-plist dir)))))
 
 ;; project integration ===============================================
 (defun project-multi-project-backend (dir)
   "Return the project for DIR as an array."
   (project-multi--local-plist dir))
 
-(cl-defgeneric project-build-dir (project)
+(cl-defmethod project-root ((project (head :project-multi)))
+  "Root for PROJECT."
+  (plist-get project :root))
+
+(cl-defmethod project-build-dir (project)
   "Return build directory of the current PROJECT.
 
-This need to be added lazily because the modeline attempts to call
+This needs to be added lazily because the modeline attempts to call
 `project-current' And this function attempts to call `completing-read'
 when there are multiple build directories candidates inside the root.
 That results in an error."
   (unless (plist-member project :build-dir)
+    (project-multi--set-connection-locals)
     (setq project (plist-put project
 			     :build-dir (project-multi--get-build-dir
 					 (plist-get project :root)))))
   (plist-get project :build-dir))
 
-(cl-defmethod project-root ((project (head :project-multi)))
-  "Root for PROJECT."
-  (plist-get project :root))
+(cl-defmethod project-compile-command (project)
+  "Return build cmake build command for current PROJECT."
+  (unless (plist-member project :compile-command)
+    (project-multi--set-connection-locals)
+    (when (not project-multi--cmake)
+      (user-error "No %s executable found in %s machine"
+	     (file-name-nondirectory project-multi-cmake-executable)
+	     (or (file-remote-p default-directory 'host)
+		 "local")))
+    (setq project (plist-put project
+			     :compile-command (format "%s --build ."
+						      project-multi--cmake))))
+  (plist-get project :compile-command))
+
 
 (cl-defmethod project-buffers ((project (head :project-multi)))
   "Return the list of all live buffers that belong to PROJECT."
@@ -173,7 +188,6 @@ That results in an error."
 (define-minor-mode project-multi-mode
   "Use Multiple backends for project.el."
   :global t
-  :lighter gtags-mode-lighter
   (cond
    (project-multi-mode
     (add-hook 'project-find-functions #'project-multi-project-backend))
