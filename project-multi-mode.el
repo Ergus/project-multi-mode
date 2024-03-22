@@ -127,24 +127,20 @@ which one to use for this session."
 			 :cache nil)
 		   project-multi--alist)))))
 
-(defun project-multi--local-plist (dir)
-  "Set and return the buffer local value of `project-multi--plist'."
+;; project integration ===============================================
+(defun project-multi-project-backend (dir)
+  "Return the project for DIR as an array."
   (if (local-variable-p 'project-multi--plist)
       project-multi--plist
     (project-multi--set-connection-locals)
     (setq-local project-multi--plist (or (project-multi--get-plist dir)
 					 (project-multi--create-plist dir)))))
 
-;; project integration ===============================================
-(defun project-multi-project-backend (dir)
-  "Return the project for DIR as an array."
-  (project-multi--local-plist dir))
-
 (cl-defmethod project-root ((project (head :project-multi)))
   "Root for PROJECT."
   (plist-get project :root))
 
-(cl-defmethod project-build-dir (project)
+(cl-defmethod project-build-dir ((project (head :project-multi)))
   "Return build directory of the current PROJECT.
 
 This needs to be added lazily because the modeline attempts to call
@@ -158,7 +154,7 @@ That results in an error."
 					 (plist-get project :root)))))
   (plist-get project :build-dir))
 
-(cl-defmethod project-compile-command (project)
+(cl-defmethod project-compile-command ((project (head :project-multi)))
   "Return build cmake build command for current PROJECT."
   (unless (plist-member project :compile-command)
     (project-multi--set-connection-locals)
@@ -174,13 +170,17 @@ That results in an error."
 
 
 (cl-defmethod project-buffers ((project (head :project-multi)))
+  "Return project name as parsed from CMakeLists.txt"
+  (plist-get project :name))
+
+(cl-defmethod project-buffers ((project (head :project-multi)))
   "Return the list of all live buffers that belong to PROJECT."
   (mapcar (lambda (buff)
 	    (cond
 	     ((eq (buffer-local-value 'project-multi--plist buff) project) buff)
 	     ((local-variable-p 'project-multi--plist buff) nil)
 	     (t (with-current-buffer buff
-		  (when (eq (project-multi--local-plist default-directory) project)
+		  (when (eq (project-multi-project-backend default-directory) project)
 		    (current-buffer))))))
 	  (buffer-list)))
 
