@@ -1,4 +1,4 @@
-;;; project-multi-mode.el --- GNU Global integration with xref, project and imenu. -*- lexical-binding: t; -*-
+;;; project-multi-mode.el --- Project.el integration with cmake and autoconf. -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022  Free Software Foundation, Inc.
 
@@ -33,106 +33,105 @@
   "Group for project-multi backend package."
   :group 'xref)
 
-(defcustom project-multi-cmake-executable "cmake"
-  "CMake executable."
-  :type 'string
-  :local t)
+(defvar project-multi--backends-alist
+  '((:type cmake
+	   :program "cmake"
+	   :root-hint "CMakeLists.txt"
+	   :build-hint "CMakeCache.txt"
+	   :project-regex "project[[:blank:]]*([[:blank:]]*\\([[:alnum:]]+\\).+)"
+	   :build-pattern "%s --build ."
+	   )
+    (:type automake
+	   :program "make"
+	   :root-hint "configure"
+	   :build-hint "config.log"
+	   :project-regex "PACKAGE_NAME='\\(.+\\)'"
+	   :build-pattern "%s"
+	   ))
+  "CMake alist with backend information.")
+(put 'project-multi--backends-alist 'risky-local-variable t)
 
 (defvar project-multi--alist nil
   "Full list of project-multi roots.
 The address is absolute for remote hosts.")
 (put 'project-multi--alist 'risky-local-variable t)
 
-(defvar-local project-multi--cmake (executable-find project-multi-cmake-executable))
-
 (defvar-local project-multi--plist nil
-  "Project Global root for this buffer.")
+  "Local access to the project plist.")
 
-;; Connection functions
-(defun project-multi--set-connection-locals ()
-  "Set connection local variables when possible and needed."
-  (when-let* ((remote (file-remote-p default-directory))
-	      ((not (local-variable-p 'project-multi--cmake)))
-	      (criteria (connection-local-criteria-for-default-directory))
-	      (symvars (intern (format "project-multi--%s-vars" remote)))
-	      (enable-connection-local-variables t))
-    (unless (alist-get symvars connection-local-profile-alist)
-      (with-connection-local-variables  ;; because *-executable can be set as connection local
-       (let ((cmake (if (local-variable-p 'project-multi-cmake-executable)
-			 project-multi-cmake-executable
-		       (file-name-nondirectory project-multi-cmake-executable))))
-	 (connection-local-set-profile-variables
-	  symvars
-	  `((project-multi--cmake . ,(executable-find cmake t))))
-	 (connection-local-set-profiles criteria symvars))))
-    (hack-connection-local-variables-apply criteria)))
-
-(defun project-multi--get-tree (dir)
+(defun project-multi--find-root (dir backend)
   "Get a list of DIR's dominant directories containing a CMakeLists.txt."
-  (let ((out))
+  (let ((root-hint (plist-get backend :root-hint))
+	(root))
     (while-let ((path (and dir
-			   (locate-dominating-file dir "CMakeLists.txt"))))
-      (push path out)
+			   (locate-dominating-file dir root-hint))))
+      (setq root path)
       (setq dir (file-name-directory (directory-file-name path))))
-    out))
 
-(defun project-multi--get-project-name (filename)
+    (when root
+      (setq root (concat (file-remote-p dir) root))
+
+      (list :project-multi (plist-get backend :type)
+	    :root root
+	    :name (project-multi--get-project-name root backend)
+	    :backend backend))))
+
+(defun project-multi--get-project-name (root backend)
   "Parse the cmake file FILENAME to get the project name.
 Simply parses the CMakeLists.txt and search for the project name parsing
 the line project(name)."
   (let ((case-fold-search nil))
     (with-temp-buffer
-      (insert-file-contents-literally filename)
-      (when (re-search-forward "project[[:blank:]]*([[:blank:]]*\\([[:alnum:]]+\\).+)" nil t)
+      (insert-file-contents-literally
+       (expand-file-name (plist-get backend :root-hint) root))
+      (when (re-search-forward (plist-get backend :project-regex) nil t)
 	(match-string-no-properties 1)))))
 
-(defun project-multi--get-build-dir (dir)
+(defun project-multi--get-build-dir (plist)
   "Get a single build_dir subdir in current DIR.
 When there is no valid, subdir, this returns nil.
 If there is only one possible build_dir, this will return it immediately.
 When there are multiple alternatives, this will ask to the user for
 which one to use for this session."
   (unless project-build-dir ;; if project-build-dir var is set, skip this because won't be used.
-    (let ((build-dir-list
-	   (remq nil        ;; Get the list of directories in root with a CMakeCache.txt
-		 (mapcar
-		  (lambda (dirlist)
-		    (and (eq (file-attribute-type (cdr dirlist)) t)
-			 (not (string-suffix-p "." (car dirlist)))
-			 (file-exists-p (expand-file-name "CMakeCache.txt" (car dirlist)))
-			 (car dirlist)))
-		  (directory-files-and-attributes dir t nil t 1)))))
+    (let* ((backend (plist-get plist :backend))
+	   (build-dir-list
+	    (remq nil        ;; Get the list of directories in root with a CMakeCache.txt
+		  (mapcar
+		   (lambda (dirlist)
+		     (and (eq (file-attribute-type (cdr dirlist)) t)
+			  (not (string-suffix-p "." (car dirlist)))
+			  (file-exists-p (expand-file-name (plist-get backend :build-hint) (car dirlist)))
+			  (car dirlist)))
+		   (directory-files-and-attributes (plist-get plist :root) t nil t 1)))))
       ;; If only one candidate, return it, else ask to the user.
       (if (cdr build-dir-list)
 	  (completing-read "Build directory: " build-dir-list nil t)
 	(car build-dir-list)))))
 
 ;; Utilities functions (a bit less low level) ========================
+
 (defun project-multi--get-plist (dir)
   "Return the plist for DIR from `project-multi--plist'."
   (seq-find (lambda (plist)
 	      (string-prefix-p (plist-get plist :root) dir))
-	    project-multi--plist))
+	    project-multi--alist))
 
 (defun project-multi--create-plist (dir)
   "Return dbpath for DIR or nil if none."
   (when-let* ((default-directory dir)
-	      (root (car (project-multi--get-tree dir))))
-    (setq root (concat (file-remote-p default-directory) root))
-    (or (project-multi--get-plist root)   ;; already exists
-	(car (push (list :project-multi 'cmake
-			 :root root
-			 :name (project-multi--get-project-name
-				(expand-file-name "CMakeLists.txt" root))
-			 :cache nil)
-		   project-multi--alist)))))
+	      (root-plist (let ((out nil)
+				(in project-multi--backends-alist))
+			    (while (and in
+					(not (setq out (project-multi--find-root dir (pop in))))))
+			    out)))
+    (car (push root-plist project-multi--alist))))
 
 ;; project integration ===============================================
 (defun project-multi-project-backend (dir)
   "Return the project for DIR as an array."
   (if (local-variable-p 'project-multi--plist)
       project-multi--plist
-    (project-multi--set-connection-locals)
     (setq-local project-multi--plist (or (project-multi--get-plist dir)
 					 (project-multi--create-plist dir)))))
 
@@ -148,24 +147,23 @@ This needs to be added lazily because the modeline attempts to call
 when there are multiple build directories candidates inside the root.
 That results in an error."
   (unless (plist-member project :build-dir)
-    (project-multi--set-connection-locals)
     (setq project (plist-put project
-			     :build-dir (project-multi--get-build-dir
-					 (plist-get project :root)))))
+			     :build-dir (project-multi--get-build-dir project))))
   (plist-get project :build-dir))
 
 (cl-defmethod project-compile-command ((project (head :project-multi)))
   "Return build cmake build command for current PROJECT."
   (unless (plist-member project :compile-command)
-    (project-multi--set-connection-locals)
-    (when (not project-multi--cmake)
-      (user-error "No %s executable found in %s machine"
-	     (file-name-nondirectory project-multi-cmake-executable)
-	     (or (file-remote-p default-directory 'host)
-		 "local")))
-    (setq project (plist-put project
-			     :compile-command (format "%s --build ."
-						      project-multi--cmake))))
+    (let* ((backend (plist-get project :backend))
+	   (program (plist-get backend :program))
+	   (executable (executable-find program t)))
+      (unless executable
+	(user-error "No %s executable found in %s machine"
+		    program
+		    (or (file-remote-p default-directory 'host)
+			"local")))
+      (setq project (plist-put project
+			       :compile-command (format (plist-get backend :build-pattern) executable)))))
   (plist-get project :compile-command))
 
 
