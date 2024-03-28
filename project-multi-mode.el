@@ -114,13 +114,14 @@ When there are multiple alternatives, this will ask to the user for
 which one to use for this session."
   (unless project-build-dir ;; if project-build-dir var is set, skip this because won't be used.
     (let* ((backend (plist-get plist :backend))
+	   (build-hint (plist-get backend :build-hint))
 	   (build-dir-list
-	    (remq nil        ;; Get the list of directories in root with a CMakeCache.txt
+	    (delq nil        ;; Get the list of directories in root with a :build-hint file
 		  (mapcar
 		   (lambda (dirlist)
 		     (and (eq (file-attribute-type (cdr dirlist)) t)
-			  (not (string-suffix-p "." (car dirlist)))
-			  (file-exists-p (expand-file-name (plist-get backend :build-hint) (car dirlist)))
+			  (not (string-suffix-p ".." (car dirlist)))
+			  (file-exists-p (expand-file-name build-hint (car dirlist)))
 			  (car dirlist)))
 		   (directory-files-and-attributes (plist-get plist :root) t nil t 1)))))
       ;; If only one candidate, return it, else ask to the user.
