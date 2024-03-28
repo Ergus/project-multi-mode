@@ -39,16 +39,19 @@
 	   :root-hint "CMakeLists.txt"
 	   :build-hint "CMakeCache.txt"
 	   :project-regex "project[[:blank:]]*([[:blank:]]*\\([[:alnum:]]+\\).+)"
-	   :build-pattern "%s --build ."
+	   :compile-command ":program --build ."
 	   )
     (:type automake
 	   :program "make"
 	   :root-hint "configure"
 	   :build-hint "config.log"
 	   :project-regex "PACKAGE_NAME='\\(.+\\)'"
-	   :build-pattern "%s"
+	   :compile-command ":program"
 	   ))
-  "CMake alist with backend information.")
+  "CMake alist with backend information.
+:compile-command may be a function that receives the
+`project-multi--plist' and returns a string or a string with annotations
+like plist keys to be substituted in the return string.")
 (put 'project-multi--backends-alist 'risky-local-variable t)
 
 (defvar project-multi--alist nil
@@ -59,8 +62,24 @@ The address is absolute for remote hosts.")
 (defvar-local project-multi--plist nil
   "Local access to the project plist.")
 
+(defun project-multi--format-command (format-string project-plist)
+  "Replace a formatted string FORMAT-STRING with keys values from PROJECT-PLIST.
+Receives a FORMAT-STRING with annotations like PROJECT-PLIST keys and
+returns a new string with all substitutions."
+  (let ((pl project-plist)
+        (fm format-string))
+    (while-let ((key (car pl))
+		(value (cadr pl)))
+      (setq fm (string-replace (symbol-name key) value fm)
+	    pl (cddr pl)))
+    fm))
+
 (defun project-multi--find-root (dir backend)
-  "Get a list of DIR's dominant directories containing a CMakeLists.txt."
+  "List DIR's dominant directories containing a `:root-hint' for BACKEND.
+This function partially initializes the project's plist with
+basic members.  Other functions latter will append extra information on
+demand when the information requires user interaction.  AS NOW, the extra
+information added latter will be `:compile-command' and `:build-dir'"
   (let ((root-hint (plist-get backend :root-hint))
 	(root))
     (while-let ((path (and dir
@@ -112,13 +131,20 @@ which one to use for this session."
 ;; Utilities functions (a bit less low level) ========================
 
 (defun project-multi--get-plist (dir)
-  "Return the plist for DIR from `project-multi--plist'."
+  "Return the plist for DIR from `project-multi--alist'.
+This function searches for a project associated with a root inside
+project-multi--alist.  The search basically searches for a common prefix
+in the path name because project-multi only supports top most roots."
   (seq-find (lambda (plist)
 	      (string-prefix-p (plist-get plist :root) dir))
 	    project-multi--alist))
 
 (defun project-multi--create-plist (dir)
-  "Return dbpath for DIR or nil if none."
+  "Return the project plist for the first valid root starting from DIR.
+This iterates over `project-multi--backends-alist' until the function
+`project-multi--find-root' finds a valid root.  Then it creates a plist
+for the project that is inserted in the cache `project-multi--alist'.
+This function returns the created plist."
   (when-let* ((default-directory dir)
 	      (root-plist (let ((out nil)
 				(in project-multi--backends-alist))
@@ -129,7 +155,14 @@ which one to use for this session."
 
 ;; project integration ===============================================
 (defun project-multi-project-backend (dir)
-  "Return the project for DIR as an array."
+  "Return the project plist for DIR.
+The search is performed in 3 steps in order to optimize an reduce
+redundant expensive operations (specially with TRAMP).
+1. Check buffer local variable `project-multi--plist'; which is set
+locally the first time we call this function from a buffer.
+2. Search for a root in `project-multi--alist' with a common prefix
+with DIR.
+3. Perform a hard search in the filesystem for project hint files."
   (if (local-variable-p 'project-multi--plist)
       project-multi--plist
     (setq-local project-multi--plist (or (project-multi--get-plist dir)
@@ -152,7 +185,7 @@ That results in an error."
   (plist-get project :build-dir))
 
 (cl-defmethod project-compile-command ((project (head :project-multi)))
-  "Return build cmake build command for current PROJECT."
+  "Return build command for current PROJECT."
   (unless (plist-member project :compile-command)
     (let* ((backend (plist-get project :backend))
 	   (program (plist-get backend :program))
@@ -162,13 +195,18 @@ That results in an error."
 		    program
 		    (or (file-remote-p default-directory 'host)
 			"local")))
+      (setq project (plist-put project :program executable))
       (setq project (plist-put project
-			       :compile-command (format (plist-get backend :build-pattern) executable)))))
+			       :compile-command
+			       (let ((command (plist-get backend :compile-command)))
+				 (cond ((stringp command)
+					(project-multi--format-command command project))
+				       ((functionp command)
+					(funcall command project))))))))
   (plist-get project :compile-command))
 
-
-(cl-defmethod project-buffers ((project (head :project-multi)))
-  "Return project name as parsed from CMakeLists.txt"
+(cl-defmethod project-name ((project (head :project-multi)))
+  "Return all buffers in PROJECT."
   (plist-get project :name))
 
 (cl-defmethod project-buffers ((project (head :project-multi)))
