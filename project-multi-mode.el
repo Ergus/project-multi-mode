@@ -112,22 +112,21 @@ When there is no valid, subdir, this returns nil.
 If there is only one possible build_dir, this will return it immediately.
 When there are multiple alternatives, this will ask to the user for
 which one to use for this session."
-  (unless project-build-dir ;; if project-build-dir var is set, skip this because won't be used.
-    (let* ((backend (plist-get plist :backend))
-	   (build-hint (plist-get backend :build-hint))
-	   (build-dir-list
-	    (delq nil        ;; Get the list of directories in root with a :build-hint file
-		  (mapcar
-		   (lambda (dirlist)
-		     (and (eq (file-attribute-type (cdr dirlist)) t)
-			  (not (string-suffix-p ".." (car dirlist)))
-			  (file-exists-p (expand-file-name build-hint (car dirlist)))
-			  (car dirlist)))
-		   (directory-files-and-attributes (plist-get plist :root) t nil t 1)))))
-      ;; If only one candidate, return it, else ask to the user.
-      (if (cdr build-dir-list)
-	  (completing-read "Build directory: " build-dir-list nil t)
-	(car build-dir-list)))))
+  (let* ((backend (plist-get plist :backend))
+	 (build-hint (plist-get backend :build-hint))
+	 (build-dir-list
+	  (delq nil        ;; Get the list of directories in root with a :build-hint file
+		(mapcar
+		 (lambda (dirlist)
+		   (and (eq (file-attribute-type (cdr dirlist)) t)
+			(not (string-suffix-p ".." (car dirlist)))
+			(file-exists-p (expand-file-name build-hint (car dirlist)))
+			(car dirlist)))
+		 (directory-files-and-attributes (plist-get plist :root) t nil t 1)))))
+    ;; If only one candidate, return it, else ask to the user.
+    (if (cdr build-dir-list)
+	(completing-read "Build directory: " build-dir-list nil t)
+      (car build-dir-list))))
 
 ;; Utilities functions (a bit less low level) ========================
 
@@ -181,8 +180,10 @@ This needs to be added lazily because the modeline attempts to call
 when there are multiple build directories candidates inside the root.
 That results in an error."
   (unless (plist-member project :build-dir)
+    ;; if project-build-dir var is set, then return nil ad project will reply on that.
     (setq project (plist-put project
-			     :build-dir (project-multi--get-build-dir project))))
+			     :build-dir (unless project-build-dir
+					  (project-multi--get-build-dir project)))))
   (plist-get project :build-dir))
 
 (cl-defmethod project-compile-command ((project (head :project-multi)))
