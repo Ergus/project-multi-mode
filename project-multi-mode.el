@@ -193,9 +193,26 @@ when there are multiple build directories candidates inside the root.
 That results in an error."
   (unless (plist-member project :build-dir)
     ;; if project-build-dir var is set, then return nil ad project will reply on that.
-    (setq project (plist-put project
-			     :build-dir (unless project-build-dir
-					  (project-multi--get-build-dir project)))))
+    (let* ((build-dir (unless project-build-dir
+		       (project-multi--get-build-dir project)))
+	  (eglot-config `(:clangd (:initializationOptions
+				  (:compilationDatabasePath ,build-dir)))))
+
+      (setq project (plist-put project :build-dir build-dir))
+
+      ;; Set dir local variables like eglot's
+      (when (and build-dir
+		 (file-exists-p (expand-file-name "compile_commands.json" build-dir)))
+	(dir-locals-set-class-variables
+	 'project-multi--eglot-vars
+	 `((nil . ((eglot-workspace-configuration . ,eglot-config)))))
+	(dir-locals-set-directory-class (plist-get project :root) 'project-multi--eglot-vars)
+	;; set the variable in all the open buffers
+	(mapc (lambda (buffer)
+		(with-current-buffer buffer
+		  (setq-local eglot-workspace-configuration eglot-config)))
+	      (project-buffers project)))))
+
   (plist-get project :build-dir))
 
 (cl-defmethod project-compile-command ((project (head :project-multi)))
