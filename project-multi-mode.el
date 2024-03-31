@@ -102,9 +102,9 @@ information added latter will be `:compile-command' and `:build-dir'"
 	      project-multi--backends-alist)))
 
 (defun project-multi--get-project-name (root backend)
-  "Parse the cmake file FILENAME to get the project name.
-Simply parses the CMakeLists.txt and search for the project name parsing
-the line project(name)."
+  "Parse the :root-hint file from BACKEND in ROOT to get the project name.
+Simply parses the :root-hint and search for the project name and returns
+the capture group in :project-regex."
   (let ((case-fold-search nil))
     (with-temp-buffer
       (insert-file-contents-literally
