@@ -169,10 +169,16 @@ locally the first time we call this function from a buffer.
 2. Search for a root in `project-multi--alist' with a common prefix
 with DIR.
 3. Perform a hard search in the filesystem for project hint files."
-  (if (local-variable-p 'project-multi--plist)
-      project-multi--plist
-    (setq-local project-multi--plist (or (project-multi--get-plist dir)
-					 (project-multi--create-plist dir)))))
+  (cond ((local-variable-p 'project-multi--plist) project-multi--plist)
+	((setq-local project-multi--plist (project-multi--get-plist dir)))
+	(t
+	 (when-let* ((project (project-multi--create-plist dir)))
+	   ;; set the variable in all the open buffers
+	   (mapc (lambda (buffer)
+		   (with-current-buffer buffer
+		     (setq-local project-multi--plist project)))
+		 (project-buffers project)))
+	 project-multi--plist)))
 
 (cl-defmethod project-root ((project (head :project-multi)))
   "Root for PROJECT."
@@ -216,17 +222,6 @@ That results in an error."
 (cl-defmethod project-name ((project (head :project-multi)))
   "Return all buffers in PROJECT."
   (plist-get project :name))
-
-(cl-defmethod project-buffers ((project (head :project-multi)))
-  "Return the list of all live buffers that belong to PROJECT."
-  (mapcar (lambda (buff)
-	    (cond
-	     ((eq (buffer-local-value 'project-multi--plist buff) project) buff)
-	     ((local-variable-p 'project-multi--plist buff) nil)
-	     (t (with-current-buffer buff
-		  (when (eq (project-multi-project-backend default-directory) project)
-		    (current-buffer))))))
-	  (buffer-list)))
 
 ;;;###autoload
 (define-minor-mode project-multi-mode
