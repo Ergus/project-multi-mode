@@ -91,9 +91,15 @@ information added latter will be `:compile-command' and `:build-dir'"
       (setq root (concat (file-remote-p dir) root))
 
       (list :project-multi (plist-get backend :type)
-	    :root root
-	    :name (project-multi--get-project-name root backend)
-	    :backend backend))))
+	    :root (expand-file-name root)
+	    :name (project-multi--get-project-name root backend)))))
+
+(defun project-multi--get-backend (project-plist)
+  "Get the backend from `project-multi--backends-alist' given a PROJECT-PLIST."
+  (let ((project-type (plist-get project-plist :project-multi)))
+    (seq-find (lambda (plist)
+		(eq (plist-get plist :type) project-type))
+	      project-multi--backends-alist)))
 
 (defun project-multi--get-project-name (root backend)
   "Parse the cmake file FILENAME to get the project name.
@@ -112,7 +118,7 @@ When there is no valid, subdir, this returns nil.
 If there is only one possible build_dir, this will return it immediately.
 When there are multiple alternatives, this will ask to the user for
 which one to use for this session."
-  (let* ((backend (plist-get plist :backend))
+  (let* ((backend (project-multi--get-backend plist))
 	 (build-hint (plist-get backend :build-hint))
 	 (build-dir-list
 	  (delq nil        ;; Get the list of directories in root with a :build-hint file
@@ -189,7 +195,7 @@ That results in an error."
 (cl-defmethod project-compile-command ((project (head :project-multi)))
   "Return build command for current PROJECT."
   (unless (plist-member project :compile-command)
-    (let* ((backend (plist-get project :backend))
+    (let* ((backend (project-multi--get-backend project))
 	   (program (plist-get backend :program))
 	   (executable (executable-find program t)))
       (unless executable
