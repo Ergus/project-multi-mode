@@ -160,6 +160,50 @@ This function returns the created plist."
 			    out)))
     (car (push root-plist project-multi--alist))))
 
+(defun project-multi--merge-plist (old new)
+  "Left merge plist OLD over NEW.
+Values already set in OLD are not changed."
+  (while-let ((key (car new))
+	      (value (cadr new)))
+    (if (plist-member old key)
+	;; When the key exists in both plists and they are also plists
+	;; we need to go recursively throw the subkeys
+	(when (and (plistp (plist-get old key))
+		   (plistp value))
+	  (project-multi--merge-plist (plist-get old key) value))
+      ;; When the key is not in the old plist, then we just set it
+      ;; completely
+      (setq old (plist-put old key value)))
+    (setq new (cddr new))))
+
+(defun project-multi--set-eglot (plist)
+  "Set the eglot variables in root f PLIST when possible."
+  (when-let* ((build-dir (plist-get plist :build-dir))
+	      (file-exists-p (expand-file-name "compile_commands.json" build-dir))
+	      (symvars (intern (format "eglot-multi--%s" (plist-get plist :build-dir)))))
+
+    (let* ((proj-config `(:clangd (:initializationOptions
+				   (:compilationDatabasePath ,build-dir))))
+	   (eglot-complete (bound-and-true-p eglot-workspace-configuration)))
+
+      (project-multi--merge-plist eglot-complete proj-config)
+
+      ;; set the dir local variables, they will apply automatically to
+      ;; all buffers open in the future within the project root
+      (dir-locals-set-class-variables
+       symvars
+       `((nil . ((eglot-workspace-configuration . ,eglot-complete)))))
+
+      (dir-locals-set-directory-class (plist-get plist :root) symvars)
+
+      ;; set the variable manually in all the already opened buffers
+      ;; TODO: JAM check if the variable is not already set in the other buffers??
+      ;; Probably override only the value instead of replacing the whole variable?
+      (mapc (lambda (buffer)
+	      (with-current-buffer buffer
+		(setq-local eglot-workspace-configuration eglot-complete)))
+	    (project-buffers plist)))))
+
 ;; project integration ===============================================
 (defun project-multi-project-backend (dir)
   "Return the project plist for DIR.
@@ -189,25 +233,10 @@ when there are multiple build directories candidates inside the root.
 That results in an error."
   (unless (plist-member project :build-dir)
     ;; if project-build-dir var is set, then return nil ad project will reply on that.
-    (let* ((build-dir (unless project-build-dir
-		       (project-multi--get-build-dir project)))
-	  (eglot-config `(:clangd (:initializationOptions
-				  (:compilationDatabasePath ,build-dir)))))
+    (setq project (plist-put project :build-dir (unless project-build-dir
+						  (project-multi--get-build-dir project))))
 
-      (setq project (plist-put project :build-dir build-dir))
-
-      ;; Set dir local variables like eglot's
-      (when (and build-dir
-		 (file-exists-p (expand-file-name "compile_commands.json" build-dir)))
-	(dir-locals-set-class-variables
-	 'project-multi--eglot-vars
-	 `((nil . ((eglot-workspace-configuration . ,eglot-config)))))
-	(dir-locals-set-directory-class (plist-get project :root) 'project-multi--eglot-vars)
-	;; set the variable in all the open buffers
-	(mapc (lambda (buffer)
-		(with-current-buffer buffer
-		  (setq-local eglot-workspace-configuration eglot-config)))
-	      (project-buffers project)))))
+    (project-multi--set-eglot project))
 
   (plist-get project :build-dir))
 
