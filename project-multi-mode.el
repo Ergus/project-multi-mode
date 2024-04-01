@@ -174,19 +174,19 @@ Values already set in OLD are not changed."
       ;; When the key is not in the old plist, then we just set it
       ;; completely
       (setq old (plist-put old key value)))
-    (setq new (cddr new))))
+    (setq new (cddr new)))
+  old)
 
 (defun project-multi--set-eglot (plist)
-  "Set the eglot variables in root f PLIST when possible."
+  "Set the eglot variables in root's PLIST when possible."
   (when-let* ((build-dir (plist-get plist :build-dir))
-	      (file-exists-p (expand-file-name "compile_commands.json" build-dir))
-	      (symvars (intern (format "eglot-multi--%s" (plist-get plist :build-dir)))))
+	      (file-exists-p (expand-file-name "compile_commands.json" build-dir)))
 
-    (let* ((proj-config `(:clangd (:initializationOptions
-				   (:compilationDatabasePath ,build-dir))))
-	   (eglot-complete (bound-and-true-p eglot-workspace-configuration)))
-
-      (project-multi--merge-plist eglot-complete proj-config)
+    (let* ((symvars (intern (format "eglot-multi--%s" (plist-get plist :build-dir))))
+	   (eglot-complete (project-multi--merge-plist ;; merge with new values
+			    (bound-and-true-p eglot-workspace-configuration)
+			    `(:clangd (:initializationOptions
+				       (:compilationDatabasePath ,build-dir))))))
 
       ;; set the dir local variables, they will apply automatically to
       ;; all buffers open in the future within the project root
