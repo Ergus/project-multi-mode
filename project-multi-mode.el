@@ -113,20 +113,21 @@ the capture group in :project-regex."
 	(match-string-no-properties 1)))))
 
 (defun project-multi--get-build-dir (plist)
-  "Get a single build_dir subdir in current DIR.
+  "Get a single build_dir subdir in current :root's PLIST.
 When there is no valid, subdir, this returns nil.
 If there is only one possible build_dir, this will return it immediately.
 When there are multiple alternatives, this will ask to the user for
 which one to use for this session."
   (let* ((backend (project-multi--get-backend plist))
-	 (build-hint (plist-get backend :build-hint))
 	 (build-dir-list
 	  (delq nil        ;; Get the list of directories in root with a :build-hint file
 		(mapcar
 		 (lambda (dirlist)
 		   (and (eq (file-attribute-type (cdr dirlist)) t)
 			(not (string-suffix-p ".." (car dirlist)))
-			(file-exists-p (expand-file-name build-hint (car dirlist)))
+			(file-exists-p (expand-file-name
+					(plist-get backend :build-hint)
+					(car dirlist)))
 			(car dirlist)))
 		 (directory-files-and-attributes (plist-get plist :root) t nil t 1)))))
     ;; If only one candidate, return it, else ask to the user.
@@ -169,16 +170,11 @@ locally the first time we call this function from a buffer.
 2. Search for a root in `project-multi--alist' with a common prefix
 with DIR.
 3. Perform a hard search in the filesystem for project hint files."
-  (cond ((local-variable-p 'project-multi--plist) project-multi--plist)
-	((setq-local project-multi--plist (project-multi--get-plist dir)))
-	(t
-	 (when-let* ((project (project-multi--create-plist dir)))
-	   ;; set the variable in all the open buffers
-	   (mapc (lambda (buffer)
-		   (with-current-buffer buffer
-		     (setq-local project-multi--plist project)))
-		 (project-buffers project)))
-	 project-multi--plist)))
+  (if (local-variable-p 'project-multi--plist)
+      project-multi--plist
+    (setq-local project-multi--plist
+		(or (project-multi--get-plist (expand-file-name dir))
+		    (project-multi--create-plist (expand-file-name dir))))))
 
 (cl-defmethod project-root ((project (head :project-multi)))
   "Root for PROJECT."
