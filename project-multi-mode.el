@@ -224,7 +224,8 @@ with DIR.
   "Root for PROJECT."
   (plist-get project :root))
 
-(cl-defmethod project-build-dir ((project (head :project-multi)))
+(cl-defmethod project-compile-info ((project (head :project-multi))
+				    (info (eql 'dir)))
   "Return build directory of the current PROJECT.
 
 This needs to be added lazily because the modeline attempts to call
@@ -232,15 +233,15 @@ This needs to be added lazily because the modeline attempts to call
 when there are multiple build directories candidates inside the root.
 That results in an error."
   (unless (plist-member project :build-dir)
-    ;; if project-build-dir var is set, then return nil ad project will reply on that.
-    (setq project (plist-put project :build-dir (unless project-build-dir
-						  (project-multi--get-build-dir project))))
+
+    (setq project (plist-put project :build-dir (project-multi--get-build-dir project)))
 
     (project-multi--set-eglot project))
 
   (plist-get project :build-dir))
 
-(cl-defmethod project-compile-command ((project (head :project-multi)))
+(cl-defmethod project-compile-info ((project (head :project-multi))
+				    (info (eql 'command)))
   "Return build command for current PROJECT."
   (unless (plist-member project :compile-command)
     (let* ((backend (project-multi--get-backend project))
