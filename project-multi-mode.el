@@ -224,7 +224,7 @@ with DIR.
   "Root for PROJECT."
   (plist-get project :root))
 
-(cl-defmethod project-compile-info ((project (head :project-multi))
+(cl-defmethod project-extra-info ((project (head :project-multi))
 				    (info (eql :compile-dir)))
   "Return INFO compile directory of the current PROJECT.
 
@@ -237,7 +237,7 @@ inside the root.  That results in an error."
     (project-multi--set-eglot project))
   (plist-get project :compile-dir))
 
-(cl-defmethod project-compile-info ((project (head :project-multi))
+(cl-defmethod project-extra-info ((project (head :project-multi))
 				    (info (eql :compile-command)))
   "Return INFO compile command for current PROJECT."
   (unless (plist-member project :compile-command)
