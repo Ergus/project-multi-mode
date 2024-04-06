@@ -79,7 +79,7 @@ returns a new string with all substitutions."
 This function partially initializes the project's plist with
 basic members.  Other functions latter will append extra information on
 demand when the information requires user interaction.  AS NOW, the extra
-information added latter will be `:compile-command' and `:build-dir'"
+information added latter will be `:compile-command' and `:compile-dir'"
   (let ((root-hint (plist-get backend :root-hint))
 	(root))
     (while-let ((path (and dir
@@ -179,10 +179,10 @@ Values already set in OLD are not changed."
 
 (defun project-multi--set-eglot (plist)
   "Set the eglot variables in root's PLIST when possible."
-  (when-let* ((build-dir (plist-get plist :build-dir))
+  (when-let* ((build-dir (plist-get plist :compile-dir))
 	      (file-exists-p (expand-file-name "compile_commands.json" build-dir)))
 
-    (let* ((symvars (intern (format "eglot-multi--%s" (plist-get plist :build-dir))))
+    (let* ((symvars (intern (format "eglot-multi--%s" (plist-get plist :compile-dir))))
 	   (eglot-complete (project-multi--merge-plist ;; merge with new values
 			    (bound-and-true-p eglot-workspace-configuration)
 			    `(:clangd (:initializationOptions
@@ -225,24 +225,21 @@ with DIR.
   (plist-get project :root))
 
 (cl-defmethod project-compile-info ((project (head :project-multi))
-				    (info (eql 'dir)))
-  "Return build directory of the current PROJECT.
+				    (info (eql :compile-dir)))
+  "Return INFO compile directory of the current PROJECT.
 
-This needs to be added lazily because the modeline attempts to call
-`project-current' And this function attempts to call `completing-read'
-when there are multiple build directories candidates inside the root.
-That results in an error."
-  (unless (plist-member project :build-dir)
-
-    (setq project (plist-put project :build-dir (project-multi--get-build-dir project)))
-
+The compile directory needs to be added lazily because the modeline
+attempts to call `project-current' And this function attempts to call
+`completing-read' when there are multiple build directories candidates
+inside the root.  That results in an error."
+  (unless (plist-member project :compile-dir)
+    (setq project (plist-put project :compile-dir (project-multi--get-build-dir project)))
     (project-multi--set-eglot project))
-
-  (plist-get project :build-dir))
+  (plist-get project :compile-dir))
 
 (cl-defmethod project-compile-info ((project (head :project-multi))
-				    (info (eql 'command)))
-  "Return build command for current PROJECT."
+				    (info (eql :compile-command)))
+  "Return INFO compile command for current PROJECT."
   (unless (plist-member project :compile-command)
     (let* ((backend (project-multi--get-backend project))
 	   (program (plist-get backend :program))
