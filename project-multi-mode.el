@@ -38,7 +38,7 @@
 	   :program "cmake"
 	   :root-hint "CMakeLists.txt"
 	   :build-hint "CMakeCache.txt"
-	   :project-regex "project[[:blank:]]*([[:blank:]]*\\([[:alnum:]]+\\).+)"
+	   :project-regex "project[[:space:]]*([[:space:]]*\\([^[:space:]\n]+\\)[^)]+)"
 	   :compile-command ":program --build ."
 	   )
     (:type automake
