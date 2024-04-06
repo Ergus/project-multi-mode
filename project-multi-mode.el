@@ -47,6 +47,13 @@
 	   :build-hint "config.log"
 	   :project-regex "PACKAGE_NAME='\\(.+\\)'"
 	   :compile-command ":program"
+	   )
+    (:type meson
+	   :program "meson"
+	   :root-hint "meson.build"
+	   :build-hint "meson-info"
+	   :project-regex "project[[:space:]]*([[:space:]]*'\\([^']+\\)'[^)]+)"
+	   :compile-command ":program compile"
 	   ))
   "CMake alist with backend information.
 :compile-command may be a function that receives the
