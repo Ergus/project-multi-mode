@@ -54,8 +54,15 @@
 	   :build-hint "meson-info"
 	   :project-regex "project[[:space:]]*([[:space:]]*'\\([^']+\\)'[^)]+)"
 	   :compile-command ":program compile"
+	   )
+    (:type cargo
+	   :program "cargo"
+	   :root-hint "Cargo.toml"
+	   :build-hint "CACHEDIR.TAG"
+	   :project-regex "name[[:space:]]=[[:space:]]\"\\([^\"]+\\)\""
+	   :compile-command ":program build"
 	   ))
-  "CMake alist with backend information.
+  "Alist with backend information.
 :compile-command may be a function that receives the
 `project-multi--plist' and returns a string or a string with annotations
 like plist keys to be substituted in the return string.")
