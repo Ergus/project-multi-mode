@@ -39,28 +39,28 @@
 	   :root-hint "CMakeLists.txt"
 	   :build-hint "CMakeCache.txt"
 	   :project-regex "project[[:space:]]*([[:space:]]*\\([^[:space:]\n]+\\)[^)]+)"
-	   :compile-command ":program --build ."
+	   :compile-command ":program --build -B :compile-dir"
 	   )
     (:type automake
 	   :program "make"
 	   :root-hint "configure"
 	   :build-hint "config.log"
 	   :project-regex "PACKAGE_NAME='\\(.+\\)'"
-	   :compile-command ":program"
+	   :compile-command ":program -C :compile-dir"
 	   )
     (:type meson
 	   :program "meson"
 	   :root-hint "meson.build"
 	   :build-hint "meson-info"
 	   :project-regex "project[[:space:]]*([[:space:]]*'\\([^']+\\)'[^)]+)"
-	   :compile-command ":program compile"
+	   :compile-command ":program compile -C :compile-dir"
 	   )
     (:type cargo
 	   :program "cargo"
 	   :root-hint "Cargo.toml"
 	   :build-hint "CACHEDIR.TAG"
 	   :project-regex "name[[:space:]]=[[:space:]]\"\\([^\"]+\\)\""
-	   :compile-command ":program build"
+	   :compile-command ":program build --target-dir :compile-dir"
 	   ))
   "Alist with backend information.
 :compile-command may be a function that receives the
@@ -246,10 +246,13 @@ The compile directory needs to be added lazily because the modeline
 attempts to call `project-current' And this function attempts to call
 `completing-read' when there are multiple build directories candidates
 inside the root.  That results in an error."
+  ;; initialize the build dir, but return the root
   (unless (plist-member project :compile-dir)
     (setq project (plist-put project :compile-dir (project-multi--get-build-dir project)))
     (project-multi--set-eglot project))
-  (plist-get project :compile-dir))
+
+  (plist-get project :root)
+  )
 
 (cl-defmethod project-extra-info ((project (head :project-multi))
 				    (info (eql :compile-command)))
@@ -276,6 +279,19 @@ inside the root.  That results in an error."
 (cl-defmethod project-name ((project (head :project-multi)))
   "Return all buffers in PROJECT."
   (plist-get project :name))
+
+
+(with-eval-after-load 'compile
+  (add-to-list
+   'compilation-error-regexp-alist-alist
+   `(cargo
+     "\\(?:\\(?4:error\\)\\|\\(?5:warning\\)\\):[^\0]+?--> \\(?1:[^:]+\\):\\(?2:[[:digit:]]+\\):\\(?3:[[:digit:]]+\\)"
+     1 2 3 (5)
+     nil
+     (5 compilation-warning-face)
+     (4 compilation-error-face)))
+
+  (add-to-list 'compilation-error-regexp-alist 'cargo))
 
 ;;;###autoload
 (define-minor-mode project-multi-mode
