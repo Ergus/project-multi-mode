@@ -39,7 +39,7 @@
 	   :root-hint "CMakeLists.txt"
 	   :build-hint "CMakeCache.txt"
 	   :project-regex "project[[:space:]]*([[:space:]]*\\([^[:space:]\n]+\\)[^)]+)"
-	   :compile-command ":program --build -B :compile-dir"
+	   :compile-command ":program --build :compile-dir"
 	   )
     (:type automake
 	   :program "make"
