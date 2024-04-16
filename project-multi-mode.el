@@ -256,8 +256,11 @@ with DIR.
   "Root for PROJECT."
   (plist-get project :root))
 
+(declare-function eglot-signal-didChangeConfiguration eglot)
+(declare-function eglot-current-server eglot)
+
 (cl-defmethod project-extra-info ((project (head :project-multi))
-				    (info (eql :compile-dir)))
+				    (_info (eql :compile-dir)))
   "Return INFO compile directory of the current PROJECT.
 
 The compile directory needs to be added lazily because the modeline
@@ -267,13 +270,17 @@ inside the root.  That results in an error."
   ;; initialize the build dir, but return the root
   (unless (plist-member project :compile-dir)
     (setq project (plist-put project :compile-dir (project-multi--get-build-dir project)))
-    (project-multi--set-eglot project))
+    (project-multi--set-eglot project)
 
-  (plist-get project :root)
-  )
+    (when-let ((bound-and-true-p eglot--managed-mode)
+	       (server (eglot-current-server)))
+      (message "Signaling Eglot server")
+      (eglot-signal-didChangeConfiguration server)))
+
+  (plist-get project :root))
 
 (cl-defmethod project-extra-info ((project (head :project-multi))
-				    (info (eql :compile-command)))
+				    (_info (eql :compile-command)))
   "Return INFO compile command for current PROJECT."
   (unless (plist-member project :compile-command)
     (let* ((backend (project-multi--get-backend project))
