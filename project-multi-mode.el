@@ -186,7 +186,7 @@ This function returns the created plist."
 		 (delq nil (mapcar (lambda (fun)
 				     (when-let* ((proj (funcall fun dir))
 						 (otherroot (project-root proj))
-						 ((string= otherroot thisroot)))
+						 ((file-equal-p otherroot thisroot)))
 					 proj))
 				   other-backends))))
 
