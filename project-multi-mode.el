@@ -82,9 +82,8 @@ Receives a FORMAT-STRING with annotations like PROJECT-PLIST keys and
 returns a new string with all substitutions."
   (let ((pl project-plist)
         (fm format-string))
-    (while-let ((key (car pl))
-		(value (cadr pl)))
-      (setq fm (string-replace (symbol-name key) value fm)
+    (while-let ((key (car pl)))
+      (setq fm (string-replace (symbol-name key) (cadr pl) fm)
 	    pl (cddr pl)))
     fm))
 
