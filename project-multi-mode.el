@@ -172,6 +172,25 @@ This function returns the created plist."
 			    (while (and in
 					(not (setq out (project-multi--find-root dir (pop in))))))
 			    out)))
+
+    ;; OK we found that there is some root hint in a parent directory of dir.
+    ;; the call to project-multi--find-root returned a plist for this backend
+    ;; We know that project.el will stop in this backend and won't search any
+    ;; other, but it is useful to know if some other backend is valid for the same root
+    ;; so, we execute the rest of the hooks in project-multi-project-backend and remember
+    ;; the result in a sub-list inside the :others key.
+    (let ((thisroot (plist-get root-plist :root))
+	  (other-backends
+		(cdr (member 'project-multi-project-backend project-find-functions))))
+
+      (plist-put root-plist :others
+		 (delq nil (mapcar (lambda (fun)
+				     (when-let* ((proj (funcall fun dir))
+						 (otherroot (project-root proj))
+						 ((string= otherroot thisroot)))
+					 proj))
+				   other-backends))))
+
     (car (push root-plist project-multi--alist))))
 
 (defun project-multi--merge-plist (old new)
