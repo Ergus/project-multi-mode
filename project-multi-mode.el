@@ -305,6 +305,13 @@ inside the root.  That results in an error."
   "Return all buffers in PROJECT."
   (plist-get project :name))
 
+(cl-defmethod project-files ((project (head :project-multi)))
+  "Return all files in PROJECT
+
+The compile projects doesn't provide file list information, so, this
+function relies on the :other backends."
+  (when-let ((other-backends (plist-get project :others)))
+    (cl-some #'project-files other-backends)))
 
 (with-eval-after-load 'compile
   (add-to-list
