@@ -236,6 +236,9 @@ Values already set in OLD are not changed."
 		(setq-local eglot-workspace-configuration eglot-complete)))
 	    (project-buffers plist)))))
 
+(declare-function eglot-signal-didChangeConfiguration eglot)
+(declare-function eglot-current-server eglot)
+
 ;; project integration ===============================================
 (defun project-multi-project-backend (dir)
   "Return the project plist for DIR.
@@ -256,9 +259,6 @@ with DIR.
   "Root for PROJECT."
   (plist-get project :root))
 
-(declare-function eglot-signal-didChangeConfiguration eglot)
-(declare-function eglot-current-server eglot)
-
 (cl-defmethod project-extra-info ((project (head :project-multi))
 				    (_info (eql :compile-dir)))
   "Return INFO compile directory of the current PROJECT.
@@ -272,7 +272,7 @@ inside the root.  That results in an error."
     (setq project (plist-put project :compile-dir (project-multi--get-build-dir project)))
     (project-multi--set-eglot project)
 
-    (when-let ((bound-and-true-p eglot--managed-mode)
+    (when-let (((bound-and-true-p eglot--managed-mode))
 	       (server (eglot-current-server)))
       (message "Signaling Eglot server")
       (eglot-signal-didChangeConfiguration server)))
