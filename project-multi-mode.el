@@ -39,28 +39,32 @@
 	   :root-hint "CMakeLists.txt"
 	   :build-hint "CMakeCache.txt"
 	   :project-regex "project[[:space:]]*([[:space:]]*\\([^[:space:]\n]+\\)[^)]+)"
-	   :compile-command ":program --build :compile-dir"
+	   :compile-command ":program --build :build-dir"
+	   :test-command "ctest --test-dir :build-dir"
 	   )
     (:type automake
 	   :program "make"
 	   :root-hint "configure"
 	   :build-hint "config.log"
 	   :project-regex "PACKAGE_NAME='\\(.+\\)'"
-	   :compile-command ":program -C :compile-dir"
+	   :compile-command ":program -C :build-dir"
+	   :test-command ":program -C :build-dir test"
 	   )
     (:type meson
 	   :program "meson"
 	   :root-hint "meson.build"
 	   :build-hint "meson-info"
 	   :project-regex "project[[:space:]]*([[:space:]]*'\\([^']+\\)'[^)]+)"
-	   :compile-command ":program compile -C :compile-dir"
+	   :compile-command ":program compile -C :build-dir"
+	   :test-command ":program test -C :build-dir"
 	   )
     (:type cargo
 	   :program "cargo"
 	   :root-hint "Cargo.toml"
 	   :build-hint "CACHEDIR.TAG"
 	   :project-regex "name[[:space:]]=[[:space:]]\"\\([^\"]+\\)\""
-	   :compile-command ":program build --target-dir :compile-dir"
+	   :compile-command ":program build --target-dir :build-dir"
+	   :test-command ":program test --target-dir :build-dir"
 	   ))
   "Alist with backend information.
 :compile-command may be a function that receives the
@@ -316,7 +320,6 @@ This performs substitution and initialization if needed."
 
 (cl-defmethod project-files ((project (head :project-multi)))
   "Return all files in PROJECT
-
 The compile projects doesn't provide file list information, so, this
 function relies on the :other backends."
   (when-let ((other-backends (plist-get project :others)))
