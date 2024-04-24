@@ -92,7 +92,7 @@ returns a new string with all substitutions."
 This function partially initializes the project's plist with
 basic members.  Other functions latter will append extra information on
 demand when the information requires user interaction.  AS NOW, the extra
-information added latter will be `:compile-command' and `:compile-dir'"
+information added latter will be `:compile-command' and `:build-dir'"
   (let ((root-hint (plist-get backend :root-hint))
 	(root))
     (while-let ((path (and dir
@@ -220,10 +220,10 @@ Values already set in OLD are not changed."
 
 (defun project-multi--set-eglot (plist)
   "Set the eglot variables in root's PLIST when possible."
-  (when-let* ((build-dir (plist-get plist :compile-dir))
+  (when-let* ((build-dir (plist-get plist :build-dir))
 	      (file-exists-p (expand-file-name "compile_commands.json" build-dir)))
 
-    (let* ((symvars (intern (format "eglot-multi--%s" (plist-get plist :compile-dir))))
+    (let* ((symvars (intern (format "eglot-multi--%s" (plist-get plist :build-dir))))
 	   (eglot-complete (project-multi--merge-plist ;; merge with new values
 			    (bound-and-true-p eglot-workspace-configuration)
 			    `(:clangd (:initializationOptions
@@ -268,47 +268,47 @@ with DIR.
   "Root for PROJECT."
   (plist-get project :root))
 
-(cl-defmethod project-extra-info ((project (head :project-multi))
-				    (_info (eql :compile-dir)))
-  "Return INFO compile directory of the current PROJECT.
-
+(defun project-multi--init-build-dir (project)
+  "Return build directory for the current PROJECT.
 The compile directory needs to be added lazily because the modeline
 attempts to call `project-current' And this function attempts to call
 `completing-read' when there are multiple build directories candidates
 inside the root.  That results in an error."
-  ;; initialize the build dir, but return the root
-  (unless (plist-member project :compile-dir)
-    (setq project (plist-put project :compile-dir (project-multi--get-build-dir project)))
-    (project-multi--set-eglot project)
+  (setq project (plist-put project :build-dir (project-multi--get-build-dir project)))
+  (project-multi--set-eglot project)
 
-    (when-let (((bound-and-true-p eglot--managed-mode))
-	       (server (eglot-current-server)))
-      (message "Signaling Eglot server")
-      (eglot-signal-didChangeConfiguration server)))
+  (when-let (((bound-and-true-p eglot--managed-mode))
+	     (server (eglot-current-server)))
+    (message "Signaling Eglot server")
+    (eglot-signal-didChangeConfiguration server)))
 
-  (plist-get project :root))
+(defmacro project-multi-info-command (info)
+  "Generate a cl-defmethod for a command
+This performs substitution and initialization if needed."
+  `(cl-defmethod project-extra-info ((project (head :project-multi))
+				    (info (eql ,info)))
+    "Return INFO compile command for current PROJECT."
+    (unless (plist-member project :build-dir)
+      (project-multi--init-build-dir project))
 
-(cl-defmethod project-extra-info ((project (head :project-multi))
-				    (_info (eql :compile-command)))
-  "Return INFO compile command for current PROJECT."
-  (unless (plist-member project :compile-command)
-    (let* ((backend (project-multi--get-backend project))
-	   (program (plist-get backend :program))
-	   (executable (executable-find program t)))
-      (unless executable
-	(user-error "No %s executable found in %s machine"
-		    program
-		    (or (file-remote-p default-directory 'host)
-			"local")))
-      (setq project (plist-put project :program executable))
+    (when-let* (((not (plist-member project info)))
+		(backend (project-multi--get-backend project))
+		(command (plist-get backend info)))
+
+      ;; We set this in the buffer local variable to support multiple
+      ;; open projects.
+      (setq-local project-compilation-buffer-name-function
+		  (project-multi--buffer-name-function info))
       (setq project (plist-put project
-			       :compile-command
-			       (let ((command (plist-get backend :compile-command)))
-				 (cond ((stringp command)
-					(project-multi--format-command command project))
-				       ((functionp command)
-					(funcall command project))))))))
-  (plist-get project :compile-command))
+			       info
+			       (cond ((stringp command)
+				      (project-multi--format-command command project))
+				     ((functionp command)
+				      (funcall command project))))))
+    (plist-get project info)))
+
+(project-multi-info-command :compile-command)
+(project-multi-info-command :test-command)
 
 (cl-defmethod project-name ((project (head :project-multi)))
   "Return all buffers in PROJECT."
