@@ -172,6 +172,15 @@ This function returns the created plist."
 					(not (setq out (project-multi--find-root dir (pop in))))))
 			    out)))
 
+    ;; Find executable in the host
+    (if-let* ((backend (project-multi--get-backend root-plist))
+	      (executable (executable-find (plist-get backend :program) t)))
+	(setq root-plist (plist-put root-plist :program executable))
+      (user-error "No executable: %s found in %s machine"
+		  program
+		  (or (file-remote-p default-directory 'host)
+		      "local")))
+
     ;; OK we found that there is some root hint in a parent directory of dir.
     ;; the call to project-multi--find-root returned a plist for this backend
     ;; We know that project.el will stop in this backend and won't search any
