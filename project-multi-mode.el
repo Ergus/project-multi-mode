@@ -334,6 +334,17 @@ function relies on the :other backends."
 
   (add-to-list 'compilation-error-regexp-alist 'cargo))
 
+(defmacro project-multi--buffer-name-function (action)
+  `(lambda (name-of-mode)
+   (let ((project (project-current t)))
+    (concat "*["
+	    (symbol-name (plist-get project :project-multi))
+	    "] "
+	    (project-name project)
+	    " "
+	    (symbol-name ,action)
+	    "*"))))
+
 ;;;###autoload
 (define-minor-mode project-multi-mode
   "Use Multiple backends for project.el."
