@@ -286,6 +286,24 @@ inside the root.  That results in an error."
     (message "Signaling Eglot server")
     (eglot-signal-didChangeConfiguration server)))
 
+(defvar-local project-multi--current-info nil
+  "Internal variable to track the accion/info taking place at the moment.
+This will be set on action call in order to access from
+project-multi--buffer-name-function because we cannot pass more
+arguments to that function as it format is predefined.")
+
+;; TODO: Improve this function to get a better format
+(defun project-multi--buffer-name-function (name-of-mode)
+  "Macro to define lambda to name the functions."
+  (let ((project (project-current t)))
+    (concat "*"
+	    (symbol-name project-multi--current-info)
+	    " ["
+	    (symbol-name (plist-get project :project-multi))
+	    "] "
+	    (project-name project)
+	    "*")))
+
 (defmacro project-multi-info-command (info)
   "Generate a cl-defmethod for a command
 This performs substitution and initialization if needed."
@@ -295,14 +313,14 @@ This performs substitution and initialization if needed."
     (unless (plist-member project :build-dir)
       (project-multi--init-build-dir project))
 
+    (setq project-multi--current-info info)
+
     (when-let* (((not (plist-member project info)))
 		(backend (project-multi--get-backend project))
 		(command (plist-get backend info)))
 
       ;; We set this in the buffer local variable to support multiple
       ;; open projects.
-      (setq-local project-compilation-buffer-name-function
-		  (project-multi--buffer-name-function info))
       (setq project (plist-put project
 			       info
 			       (cond ((stringp command)
@@ -337,26 +355,18 @@ function relies on the :other backends."
 
   (add-to-list 'compilation-error-regexp-alist 'cargo))
 
-(defmacro project-multi--buffer-name-function (action)
-  `(lambda (name-of-mode)
-   (let ((project (project-current t)))
-    (concat "*["
-	    (symbol-name (plist-get project :project-multi))
-	    "] "
-	    (project-name project)
-	    " "
-	    (symbol-name ,action)
-	    "*"))))
-
 ;;;###autoload
 (define-minor-mode project-multi-mode
   "Use Multiple backends for project.el."
   :global t
   (cond
    (project-multi-mode
-    (add-hook 'project-find-functions #'project-multi-project-backend))
+    (add-hook 'project-find-functions #'project-multi-project-backend)
+    (setq project-compilation-buffer-name-function #'project-multi--buffer-name-function))
    (t
-    (remove-hook 'project-find-functions #'project-multi-project-backend))))
+    (remove-hook 'project-find-functions #'project-multi-project-backend)
+    (setq project-compilation-buffer-name-function nil)
+    )))
 
 (provide 'project-multi-mode)
 ;;; project-multi-mode.el ends here
