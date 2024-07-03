@@ -127,6 +127,21 @@ the capture group in :project-regex."
       (when (re-search-forward (plist-get backend :project-regex) nil t)
 	(match-string-no-properties 1)))))
 
+(defun project-multi--get-subdirectories-with (root hint)
+  "This function searches a file named HINT inside the first level sub-directories of ROOT.
+The search is performed only in the first level directories and
+non-recursively.  If the compile hint is in more than one subdirectory
+this function returns the list with all the candidates."
+  (when (file-exists-p root)
+    (delq nil        ;; Get the list of directories in root with a :build-hint file
+	  (mapcar
+	   (lambda (dirlist)
+	     (and (eq (file-attribute-type (cdr dirlist)) t) ;; it is a directory
+		  (not (string-suffix-p ".." (car dirlist))) ;; but not parent
+		  (file-exists-p (expand-file-name hint (car dirlist)))
+		  (car dirlist)))
+	   (directory-files-and-attributes root t nil t 1)))))
+
 (defun project-multi--get-build-dir (plist)
   "Get a single build_dir subdir in current :root's PLIST.
 When there is no valid, subdir, this returns nil.
@@ -134,17 +149,14 @@ If there is only one possible build_dir, this will return it immediately.
 When there are multiple alternatives, this will ask to the user for
 which one to use for this session."
   (let* ((backend (project-multi--get-backend plist))
-	 (build-dir-list
-	  (delq nil        ;; Get the list of directories in root with a :build-hint file
-		(mapcar
-		 (lambda (dirlist)
-		   (and (eq (file-attribute-type (cdr dirlist)) t)
-			(not (string-suffix-p ".." (car dirlist)))
-			(file-exists-p (expand-file-name
-					(plist-get backend :build-hint)
-					(car dirlist)))
-			(car dirlist)))
-		 (directory-files-and-attributes (plist-get plist :root) t nil t 1)))))
+	 (root (plist-get plist :root))
+	 (hint (plist-get backend :build-hint))
+	 (build-dir-list (or (project-multi--get-subdirectories-with root hint)
+			     ;; search in all current subdirs else inside ./build if exists
+			     (project-multi--get-subdirectories-with
+			      (expand-file-name "build" root)
+			      hint))))
+
     ;; If only one candidate, return it, else ask to the user.
     (if (cdr build-dir-list)
 	(completing-read "Build directory: " build-dir-list nil t)
