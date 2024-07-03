@@ -140,7 +140,7 @@ this function returns the list with all the candidates."
 		  (not (string-suffix-p ".." (car dirlist))) ;; but not parent
 		  (file-exists-p (expand-file-name hint (car dirlist)))
 		  (car dirlist)))
-	   (directory-files-and-attributes root t nil t 1)))))
+	   (directory-files-and-attributes root t nil t)))))
 
 (defun project-multi--get-build-dir (plist)
   "Get a single build_dir subdir in current :root's PLIST.
