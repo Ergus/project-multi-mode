@@ -38,7 +38,7 @@
 	   :program "cmake"
 	   :root-hint "CMakeLists.txt"
 	   :build-hint "CMakeCache.txt"
-	   :project-regex "project[[:space:]]*([[:space:]]*\\([^[:space:]\n]+\\)[^)]+)"
+	   :project-regex "project[[:space:]]*([[:space:]]*\\([^[:space:]\n)]+\\)[^)]*)"
 	   :compile-command ":program --build :build-dir"
 	   :test-command "ctest --test-dir :build-dir"
 	   )
@@ -105,8 +105,6 @@ information added latter will be `:compile-command' and `:build-dir'"
       (setq dir (file-name-directory (directory-file-name path))))
 
     (when root
-      (setq root (concat (file-remote-p dir) root))
-
       (list :project-multi (plist-get backend :type)
 	    :root (expand-file-name root)
 	    :name (project-multi--get-project-name root backend)))))
