@@ -5,7 +5,7 @@
 ;; Author: Jimmy Aguilar Mena
 ;; URL: https://github.com/Ergus/projects-multi-mode
 ;; Keywords: project, cmake, build
-;; Version: 1.1
+;; Version: 1.2
 ;; Package-Requires: ((emacs "28"))
 
 ;; This program is free software: you can redistribute it and/or modify
@@ -291,7 +291,7 @@ inside the root.  That results in an error."
   (setq project (plist-put project :build-dir (project-multi--get-build-dir project)))
   (project-multi--set-eglot project)
 
-  (when-let (((bound-and-true-p eglot--managed-mode))
+  (when-let* (((bound-and-true-p eglot--managed-mode))
 	     (server (eglot-current-server)))
     (message "Signaling Eglot server")
     (eglot-signal-didChangeConfiguration server)))
@@ -350,7 +350,7 @@ This performs substitution and initialization if needed."
   "Return all files in PROJECT
 The compile projects doesn't provide file list information, so, this
 function relies on the :other backends."
-  (when-let ((other-backends (plist-get project :others)))
+  (when-let* ((other-backends (plist-get project :others)))
     (cl-some #'project-files other-backends)))
 
 (with-eval-after-load 'compile
