@@ -232,32 +232,34 @@ Values already set in OLD are not changed."
     (setq new (cddr new)))
   old)
 
-(defun project-multi--set-eglot (plist)
+(defun project-multi--set-eglot (project-plist)
   "Set the eglot variables in root's PLIST when possible."
-  (when-let* ((build-dir (plist-get plist :build-dir))
-	      (file-exists-p (expand-file-name "compile_commands.json" build-dir)))
+  (let* ((symvars (intern (format "eglot-multi--%s" (plist-get project-plist :build-dir))))
+	 (eglot-complete (project-multi--merge-plist ;; merge with new values
+			  (bound-and-true-p eglot-workspace-configuration)
+			  `(:clangd (:initializationOptions
+				     (:compilationDatabasePath ,(plist-get project-plist :build-dir)))))))
 
-    (let* ((symvars (intern (format "eglot-multi--%s" (plist-get plist :build-dir))))
-	   (eglot-complete (project-multi--merge-plist ;; merge with new values
-			    (bound-and-true-p eglot-workspace-configuration)
-			    `(:clangd (:initializationOptions
-				       (:compilationDatabasePath ,build-dir))))))
+    ;; set the dir local variables, they will apply automatically to
+    ;; all buffers open in the future within the project root
+    (dir-locals-set-class-variables
+     symvars
+     `((nil . ((eglot-workspace-configuration . ,eglot-complete)))))
 
-      ;; set the dir local variables, they will apply automatically to
-      ;; all buffers open in the future within the project root
-      (dir-locals-set-class-variables
-       symvars
-       `((nil . ((eglot-workspace-configuration . ,eglot-complete)))))
+    (dir-locals-set-directory-class (plist-get project-plist :root) symvars)
 
-      (dir-locals-set-directory-class (plist-get plist :root) symvars)
+    ;; set the variable manually in all the already opened buffers
+    ;; TODO: JAM check if the variable is not already set in the other buffers??
+    ;; Probably override only the value instead of replacing the whole variable?
+    (mapc (lambda (buffer)
+	    (with-current-buffer buffer
+	      (setq-local eglot-workspace-configuration eglot-complete)))
+	  (project-buffers project-plist)))
 
-      ;; set the variable manually in all the already opened buffers
-      ;; TODO: JAM check if the variable is not already set in the other buffers??
-      ;; Probably override only the value instead of replacing the whole variable?
-      (mapc (lambda (buffer)
-	      (with-current-buffer buffer
-		(setq-local eglot-workspace-configuration eglot-complete)))
-	    (project-buffers plist)))))
+  (when-let* (((bound-and-true-p eglot--managed-mode))
+	      (server (eglot-current-server)))
+    (message "Signaling Eglot server")
+    (eglot-signal-didChangeConfiguration server)))
 
 (declare-function eglot-signal-didChangeConfiguration eglot)
 (declare-function eglot-current-server eglot)
@@ -282,19 +284,23 @@ with DIR.
   "Root for PROJECT."
   (plist-get project :root))
 
-(defun project-multi--init-build-dir (project)
+(defun project-multi--init-build-dir (project-plist)
   "Return build directory for the current PROJECT.
 The compile directory needs to be added lazily because the modeline
 attempts to call `project-current' And this function attempts to call
 `completing-read' when there are multiple build directories candidates
 inside the root.  That results in an error."
-  (setq project (plist-put project :build-dir (project-multi--get-build-dir project)))
-  (project-multi--set-eglot project)
+  (let ((build-dir (project-multi--get-build-dir project-plist))
+	(build-database))
 
-  (when-let* (((bound-and-true-p eglot--managed-mode))
-	     (server (eglot-current-server)))
-    (message "Signaling Eglot server")
-    (eglot-signal-didChangeConfiguration server)))
+    ;; This is set unconditionally, if nil set it to nil
+    (setq project-plist (plist-put project-plist :build-dir build-dir))
+
+    (when build-dir
+      (setq build-database (expand-file-name "compile_commands.json" build-dir))
+      (when  (file-exists-p build-database)
+	(setq project-plist (plist-put project-plist :compile-database build-database))
+	(project-multi--set-eglot project-plist)))))
 
 (defvar-local project-multi--current-info nil
   "Internal variable to track the accion/info taking place at the moment.
@@ -304,7 +310,7 @@ arguments to that function as it format is predefined.")
 
 ;; TODO: Improve this function to get a better format
 (defun project-multi--buffer-name-function (name-of-mode)
-  "Macro to define lambda to name the functions."
+  "Function to name the compilation buffers with more precise information."
   (let ((project (project-current t)))
     (concat "*"
 	    (symbol-name project-multi--current-info)
@@ -353,11 +359,15 @@ function relies on the :other backends."
   (when-let* ((other-backends (plist-get project :others)))
     (cl-some #'project-files other-backends)))
 
+(cl-defmethod project-extra-info ((project (head :project-multi))
+				  key)
+  (plist-get project key))
+
 (with-eval-after-load 'compile
   (add-to-list
    'compilation-error-regexp-alist-alist
    `(cargo
-     "\\(?:\\(?4:error\\)\\|\\(?5:warning\\)\\):[^\0]+?--> \\(?1:[^:]+\\):\\(?2:[[:digit:]]+\\):\\(?3:[[:digit:]]+\\)"
+     "\\(?:\\(?4:error\\)\\|\\(?5:warning\\)\\)[^\0]+?--> \\(?1:[^:]+\\):\\(?2:[[:digit:]]+\\):\\(?3:[[:digit:]]+\\)"
      1 2 3 (5)
      nil
      (5 compilation-warning-face)
