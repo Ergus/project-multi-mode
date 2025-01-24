@@ -361,7 +361,8 @@ function relies on the :other backends."
 
 (cl-defmethod project-extra-info ((project (head :project-multi))
 				  key)
-  (plist-get project key))
+  (or (plist-get project-extra-info key)
+      (plist-get project key)))
 
 (with-eval-after-load 'compile
   (add-to-list
