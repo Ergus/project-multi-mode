@@ -85,9 +85,14 @@ The address is absolute for remote hosts.")
 Receives a FORMAT-STRING with annotations like PROJECT-PLIST keys and
 returns a new string with all substitutions."
   (let ((pl project-plist)
-        (fm format-string))
+        (fm format-string)
+	newval)
     (while-let ((key (car pl)))
-      (setq fm (string-replace (symbol-name key) (cadr pl) fm)
+      (setq newval (format "%s" (cadr pl)))
+      (setq fm (string-replace (symbol-name key)
+			       (or (file-remote-p newval 'localname)
+				   newval)
+			       fm)
 	    pl (cddr pl)))
     fm))
 
