@@ -334,21 +334,21 @@ This performs substitution and initialization if needed."
     (unless (plist-member project :build-dir)
       (project-multi--init-build-dir project))
 
-    (setq project-multi--current-info info)
+    (setq project-multi--current-info ,info)
 
-    (when-let* (((not (plist-member project info)))
+    (when-let* (((not (plist-member project ,info)))
 		(backend (project-multi--get-backend project))
-		(command (plist-get backend info)))
+		(command (plist-get backend ,info)))
 
       ;; We set this in the buffer local variable to support multiple
       ;; open projects.
       (setq project (plist-put project
-			       info
+			       ,info
 			       (cond ((stringp command)
 				      (project-multi--format-command command project))
 				     ((functionp command)
 				      (funcall command project))))))
-    (plist-get project info)))
+    (plist-get project ,info)))
 
 (project-multi-info-command :compile-command)
 (project-multi-info-command :test-command)
