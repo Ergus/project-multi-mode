@@ -369,18 +369,6 @@ function relies on the :other backends."
   (or (plist-get project-extra-info key)
       (plist-get project key)))
 
-(with-eval-after-load 'compile
-  (add-to-list
-   'compilation-error-regexp-alist-alist
-   `(cargo
-     "\\(?:\\(?4:error\\)\\|\\(?5:warning\\)\\)[^\0]+?--> \\(?1:[^:]+\\):\\(?2:[[:digit:]]+\\):\\(?3:[[:digit:]]+\\)"
-     1 2 3 (5)
-     nil
-     (5 compilation-warning-face)
-     (4 compilation-error-face)))
-
-  (add-to-list 'compilation-error-regexp-alist 'cargo))
-
 ;;;###autoload
 (define-minor-mode project-multi-mode
   "Use Multiple backends for project.el."
