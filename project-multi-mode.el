@@ -357,12 +357,18 @@ This performs substitution and initialization if needed."
   "Return all buffers in PROJECT."
   (plist-get project :name))
 
-(cl-defmethod project-files ((project (head :project-multi)))
+(cl-defmethod project-files ((project (head :project-multi)) &optional dirs)
   "Return all files in PROJECT
 The compile projects doesn't provide file list information, so, this
 function relies on the :other backends."
-  (when-let* ((other-backends (plist-get project :others)))
-    (cl-some #'project-files other-backends)))
+  (let ((other-backends (plist-get project :others)))
+    (catch 'found
+      (while other-backends
+	(let* ((backend (car other-backends))
+	       (result (project-files backend dirs)))
+	  (when result (throw 'found result))
+	  (setq other-backends (cdr other-backends)))))))
+
 
 (cl-defmethod project-extra-info ((project (head :project-multi))
 				  key)
