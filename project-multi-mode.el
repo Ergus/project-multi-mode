@@ -33,6 +33,15 @@
   "Group for project-multi backend package."
   :group 'xref)
 
+(defcustom project-multi-eagerly t
+  "Configure the whole build information eagerly. This may add user
+questions during the startup."
+  :type 'boolean)
+
+(defcustom project-multi-integrate-eglot t
+  "Add eglot integration."
+  :type 'boolean)
+
 (defvar project-multi--backends-alist
   '((:type cmake
 	   :program "cmake"
@@ -208,7 +217,7 @@ This function returns the created plist."
     ;; the result in a sub-list inside the :others key.
     (let ((thisroot (plist-get root-plist :root))
 	  (other-backends
-		(cdr (member 'project-multi-project-backend project-find-functions))))
+	   (cdr (member 'project-multi-project-backend project-find-functions))))
 
       (plist-put root-plist :others
 		 (delq nil (mapcar (lambda (fun)
@@ -217,6 +226,9 @@ This function returns the created plist."
 						 ((file-equal-p otherroot thisroot)))
 					 proj))
 				   other-backends))))
+    ;; Ok now we can decide initialize build information eagerly
+    (when project-multi-eagerly
+      (project-multi--init-build-dir root-plist))
 
     (car (push root-plist project-multi--alist))))
 
@@ -305,7 +317,8 @@ inside the root.  That results in an error."
       (setq build-database (expand-file-name "compile_commands.json" build-dir))
       (when  (file-exists-p build-database)
 	(setq project-plist (plist-put project-plist :compile-database build-database))
-	(project-multi--set-eglot project-plist)))))
+	(when project-multi-integrate-eglot
+	  (project-multi--set-eglot project-plist))))))
 
 (defvar-local project-multi--current-info nil
   "Internal variable to track the accion/info taking place at the moment.
