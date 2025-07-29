@@ -374,13 +374,14 @@ This performs substitution and initialization if needed."
   "Return all files in PROJECT
 The compile projects doesn't provide file list information, so, this
 function relies on the :other backends."
-  (let ((other-backends (plist-get project :others)))
-    (catch 'found
-      (while other-backends
-	(let* ((backend (car other-backends))
-	       (result (project-files backend dirs)))
-	  (when result (throw 'found result))
-	  (setq other-backends (cdr other-backends)))))))
+  (if-let* ((other-backends (plist-get project :others)))
+      (catch 'found
+	(while other-backends
+	  (let* ((backend (car other-backends))
+		 (result (project-files backend dirs)))
+	    (when result (throw 'found result))
+	    (setq other-backends (cdr other-backends)))))
+    (error "Project %s doesn't have other backends" (project-name project))))
 
 
 (cl-defmethod project-extra-info ((project (head :project-multi))
