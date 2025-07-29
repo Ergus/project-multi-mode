@@ -251,17 +251,8 @@ Values already set in OLD are not changed."
 
 (defun project-multi--add-dir-local-var (directory new-pair)
   "Add a directory-local variable NEW-PAIR for MODE in DIRECTORY, preserving existing ones."
-
   (if-let* ((existing-class (car (alist-get directory dir-locals-directory-cache nil nil 'string-equal))))
-      (let* ((existing-vars (when existing-class
-			      (alist-get existing-class dir-locals-class-alist)))
-	     (newval (push new-pair (alist-get nil existing-vars)))
-	     (newclass (intern (format "eglot-multi--%s" directory))))
-
-	(unless existing-class
-	  (dir-locals-set-class-variables newclass (cons nil newval))
-	  (dir-locals-set-directory-class directory newclass)))
-
+      (push new-pair (alist-get nil (alist-get existing-class dir-locals-class-alist)))
     (message "Could not set dir local: %s" new-pair)))
 
 (defun project-multi--set-eglot (project-plist)
