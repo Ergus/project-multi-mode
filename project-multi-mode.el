@@ -249,36 +249,39 @@ Values already set in OLD are not changed."
     (setq new (cddr new)))
   old)
 
-(defun project-multi--add-dir-local-var (directory new-pair)
-  "Add a directory-local variable NEW-PAIR for MODE in DIRECTORY, preserving existing ones."
-  (if-let* ((existing-class (car (alist-get directory dir-locals-directory-cache nil nil 'string-equal))))
-      (push new-pair (alist-get nil (alist-get existing-class dir-locals-class-alist)))
-    (message "Could not set dir local: %s" new-pair)))
-
 (defun project-multi--set-eglot (project-plist)
   "Set the eglot variables in root's PLIST when possible."
-  (let* ((eglot-complete (project-multi--merge-plist ;; merge with new values
-			  (bound-and-true-p eglot-workspace-configuration)
-			  `(:clangd (:initializationOptions
-				     (:compilationDatabasePath ,(plist-get project-plist :build-dir)))))))
 
-    ;; set the dir local variables, they will apply automatically to
-    ;; all buffers open in the future within the project root
-    (project-multi--add-dir-local-var (plist-get project-plist :root)
-				      `(eglot-workspace-configuration . (,eglot-complete)))
+  ;; set the dir local variables, they will apply automatically to
+  ;; all buffers open in the future within the project root. But I
+  ;; cannot use the api because it will override, so, try not too hard.
+  (if-let* ((existing-class (car (alist-get
+				  (plist-get project-plist :root)
+				  dir-locals-directory-cache nil nil 'string-equal)))
+	    (existing-values (alist-get existing-class dir-locals-class-alist))
+	    (eglot-complete (project-multi--merge-plist ;; merge with new values
+			     (bound-and-true-p eglot-workspace-configuration)
+			     `(:clangd (:initializationOptions
+					(:compilationDatabasePath ,(plist-get project-plist :build-dir)))))))
 
-    ;; set the variable manually in all the already opened buffers
-    ;; TODO: JAM check if the variable is not already set in the other buffers??
-    ;; Probably override only the value instead of replacing the whole variable?
-    (mapc (lambda (buffer)
-	    (with-current-buffer buffer
-	      (hack-dir-local-variables)))
-	  (project-buffers project-plist)))
+      ;; If there is not class entry in dir-locals-class-alist this command effectively does nothing.
+      (progn
+	(push `(eglot-workspace-configuration . (,eglot-complete)) (alist-get nil existing-values))
 
-  (when-let* (((bound-and-true-p eglot--managed-mode))
-	      (server (eglot-current-server)))
-    (message "Signaling Eglot server")
-    (eglot-signal-didChangeConfiguration server)))
+	;; set the variable manually in all the already opened buffers
+	;; TODO: JAM check if the variable is not already set in the other buffers??
+	;; Probably override only the value instead of replacing the whole variable?
+	(mapc (lambda (buffer)
+		(with-current-buffer buffer
+		  (hack-dir-local-variables)))
+	      (project-buffers project-plist))
+
+	(when-let* (((bound-and-true-p eglot--managed-mode))
+		    (server (eglot-current-server)))
+	  (message "Signaling Eglot server")
+	  (eglot-signal-didChangeConfiguration server)))
+
+    (warn "Could not set dir local: eglot-workspace-configuration")))
 
 (declare-function eglot-signal-didChangeConfiguration eglot)
 (declare-function eglot-current-server eglot)
