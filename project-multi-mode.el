@@ -266,7 +266,7 @@ Values already set in OLD are not changed."
 
       ;; If there is not class entry in dir-locals-class-alist this command effectively does nothing.
       (progn
-	(push `(eglot-workspace-configuration . (,eglot-complete)) (alist-get nil existing-values))
+	(push `(eglot-workspace-configuration . ,eglot-complete) (alist-get nil existing-values))
 
 	;; set the variable manually in all the already opened buffers
 	;; TODO: JAM check if the variable is not already set in the other buffers??
